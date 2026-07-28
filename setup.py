@@ -4,7 +4,7 @@ setup(
     name="subdomain-al-sinwar",
     version="1.0.0",
     description="Passive Subdomain Enumeration Framework",
-    author="Your Name",
+    author="Mohamed",
     packages=find_packages(),
     py_modules=["main", "cli", "config"],
     install_requires=[
@@ -14,7 +14,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "subdomain-al-sinwar=main:start_cli",
+            "subdomain-al-sinwar=main:start",
         ],
     },
     python_requires=">=3.8",

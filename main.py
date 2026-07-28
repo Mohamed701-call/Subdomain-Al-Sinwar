@@ -2,32 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import sys
+
 from cli import build_parser
 from core.manager import SourceManager
 from core.registry import SourceRegistry
-
-from sources.crtsh import CrtShSource
-from sources.virustotal import VirusTotalSource
-
 from utils.banner import show_banner
 from utils.logger import logger
 from utils.output import save_results
 
 
-def get_default_registry() -> SourceRegistry:
-    registry = SourceRegistry()
-    registry.register(CrtShSource)
-    registry.register(VirusTotalSource)
-    return registry
-
-
-async def start():
+def start():
     parser = build_parser()
     args = parser.parse_args()
 
     show_banner()
 
-    registry = get_default_registry()
+    registry = SourceRegistry()
 
     if args.list_sources:
         print("Registered Passive Sources:")
@@ -42,7 +32,7 @@ async def start():
     manager = SourceManager(registry)
 
     try:
-        results = await manager.run(args.domain)
+        results = asyncio.run(manager.run(args.domain))
         save_results(
             records=results,
             domain=args.domain,
@@ -64,8 +54,5 @@ async def start():
     logger.info(f"Enumeration completed for {args.domain}")
 
 
-def start_cli():
-    asyncio.run(start())
-
 if __name__ == "__main__":
-    start_cli()
+    start()
