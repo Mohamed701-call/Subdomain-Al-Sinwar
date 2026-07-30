@@ -1,30 +1,47 @@
-from __future__ import annotations
+"""urlscan.io — free, API key optional (higher rate limit with one)."""
 
-from typing import Set, Tuple
-from config import URLSCAN_API_KEY
+import json
+import os
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
-from utils.helpers import extract_subdomains
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
 
 
-class URLScanSource(BaseSource):
-    name = "URLScan"
+@register
+class UrlscanSource(BaseSource):
+    name = "urlscan"
+    display_name = "urlscan.io"
+    requires_key = None  # optional — works without a key at lower rate limits
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
-        headers = {}
-        if URLSCAN_API_KEY:
-            headers["API-Key"] = URLSCAN_API_KEY
-
-        url = f"https://urlscan.io/api/v1/search/?q=domain:{domain}"
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
+        api_key = os.environ.get("URLSCAN_API_KEY")
+        headers = {"User-Agent": USER_AGENT}
+        if api_key:
+            headers["API-Key"] = api_key
 
         try:
-            data = await self.fetch_json(url, headers=headers)
-            if isinstance(data, dict) and "results" in data:
-                for item in data["results"]:
-                    page_domain = item.get("page", {}).get("domain", "")
-                    for sub in extract_subdomains(page_domain, domain):
-                        results.add((sub, f"Scan ID: {item.get('_id')}"))
-        except Exception:
-            pass
+            resp = requests.get(
+                "https://urlscan.io/api/v1/search/",
+                params={"q": f"domain:{domain}", "size": "10000"},
+                headers=headers, timeout=30,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.RequestException, json.JSONDecodeError, ValueError) as e:
+            print(f"[!] urlscan.io error: {e}", file=sys.stderr)
+            return results
 
+        for entry in data.get("results", []):
+            page = entry.get("page", {})
+            for field in ("domain", "url", "apexDomain"):
+                val = page.get(field, "")
+                if val:
+                    results |= extract_subdomains(str(val), domain, bundle.host)
         return results

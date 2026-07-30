@@ -1,0 +1,39 @@
+"""ProjectDiscovery's public DNS dataset (dns.projectdiscovery.io) — free,
+no key required. Returns known subdomains for a domain from their passive
+DNS dataset (the same data that feeds their Chaos / cloud platform)."""
+
+import json
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
+from core.base import BaseSource
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
+
+
+@register
+class ProjectDiscoveryCloudSource(BaseSource):
+    name = "projectdiscovery_cloud"
+    display_name = "ProjectDiscovery Cloud DNS"
+    requires_key = None
+
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
+        url = f"https://dns.projectdiscovery.io/dns/{domain}/subdomains"
+        try:
+            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.RequestException, json.JSONDecodeError, ValueError) as e:
+            print(f"[!] ProjectDiscovery Cloud DNS error: {e}", file=sys.stderr)
+            return results
+
+        # Response shape: {"domain": "example.com", "subdomains": ["api", "www", ...]}
+        # subdomains are returned as bare labels, not full hostnames.
+        for label in data.get("subdomains", []):
+            candidate = f"{label}.{domain}".lower()
+            results |= extract_subdomains(candidate, domain, bundle.host)
+        return results

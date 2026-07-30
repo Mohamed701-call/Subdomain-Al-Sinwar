@@ -1,26 +1,38 @@
-from __future__ import annotations
+"""HackerTarget hostsearch — free, no key, small daily rate limit."""
 
-from typing import Set, Tuple
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
-from utils.helpers import extract_subdomains
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
 
 
+@register
 class HackerTargetSource(BaseSource):
-    name = "HackerTarget"
+    name = "hackertarget"
+    display_name = "HackerTarget"
+    requires_key = None
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
-        url = f"https://api.hackertarget.com/hostsearch/?q={domain}"
-
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
         try:
-            text = await self.fetch_text(url)
-            if text and "error" not in text.lower():
-                for line in text.splitlines():
-                    parts = line.split(",")
-                    if parts:
-                        for sub in extract_subdomains(parts[0], domain):
-                            results.add((sub, f"IP: {parts[1]}" if len(parts) > 1 else "HostSearch"))
-        except Exception:
-            pass
+            resp = requests.get(
+                "https://api.hackertarget.com/hostsearch/", params={"q": domain},
+                headers={"User-Agent": USER_AGENT}, timeout=20,
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            print(f"[!] HackerTarget error: {e}", file=sys.stderr)
+            return results
 
+        if "API count exceeded" in resp.text or "error" in resp.text.lower()[:50]:
+            print(f"[!] HackerTarget: {resp.text.strip()[:150]}", file=sys.stderr)
+            return results
+
+        for line in resp.text.splitlines():
+            results |= extract_subdomains(line, domain, bundle.host)
         return results

@@ -1,23 +1,33 @@
-from __future__ import annotations
+"""RapidDNS.io — free passive DNS scrape, no key needed."""
 
-from typing import Set, Tuple
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
-from utils.helpers import extract_subdomains
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
 
 
-class RapidDNSSource(BaseSource):
-    name = "RapidDNS"
+@register
+class RapidDnsSource(BaseSource):
+    name = "rapiddns"
+    display_name = "RapidDNS.io"
+    requires_key = None
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
-        url = f"https://rapiddns.io/subdomain/{domain}?full=1"
-
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
         try:
-            html = await self.fetch_text(url)
-            if html:
-                for sub in extract_subdomains(html, domain):
-                    results.add((sub, "HTML Response"))
-        except Exception:
-            pass
+            resp = requests.get(
+                f"https://rapiddns.io/subdomain/{domain}", params={"full": "1"},
+                headers={"User-Agent": USER_AGENT}, timeout=30,
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            print(f"[!] RapidDNS.io error: {e}", file=sys.stderr)
+            return results
 
+        results |= extract_subdomains(resp.text, domain, bundle.host)
         return results

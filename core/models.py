@@ -1,38 +1,32 @@
-from __future__ import annotations
+"""Shared data models passed between sources, the manager, and output."""
 
-import time
 from dataclasses import dataclass, field
-from typing import Dict, Set
+from typing import Optional, Set
 
 
 @dataclass
-class SubdomainRecord:
-    hostname: str
-    sources: Set[str] = field(default_factory=set)
-    evidence: Dict[str, str] = field(default_factory=dict)
-    confidence_score: int = 0
+class SourceResult:
+    """What every source returns after running."""
+    name: str
+    subdomains: Set[str] = field(default_factory=set)
+    error: Optional[str] = None
+    duration_seconds: float = 0.0
+    skipped: bool = False
+    skip_reason: Optional[str] = None
 
-    def add_discovery(self, source_name: str, proof: str = "") -> None:
-        self.sources.add(source_name)
-        if proof:
-            self.evidence[source_name] = proof
-        self.update_score()
-
-    def update_score(self) -> None:
-        count = len(self.sources)
-        if count == 1:
-            self.confidence_score = 40
-        elif count == 2:
-            self.confidence_score = 70
-        else:
-            self.confidence_score = min(100, 70 + (count - 2) * 15)
+    @property
+    def count(self) -> int:
+        return len(self.subdomains)
 
 
 @dataclass
-class ScanSession:
-    target_domain: str
-    start_time: float = field(default_factory=time.perf_counter)
-    end_time: float = 0.0
-    records: Dict[str, SubdomainRecord] = field(default_factory=dict)
-    stats: Dict[str, int] = field(default_factory=dict)
-    errors: Dict[str, str] = field(default_factory=dict)
+class ScanResult:
+    """Aggregated result of an entire scan across all sources."""
+    domain: str
+    per_source: dict  # name -> SourceResult
+    all_subdomains: Set[str] = field(default_factory=set)
+    dork_results: list = field(default_factory=list)
+
+    @property
+    def total_count(self) -> int:
+        return len(self.all_subdomains)

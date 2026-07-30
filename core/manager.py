@@ -1,86 +1,85 @@
-from __future__ import annotations
+"""Runs sources and collects results. Independent sources (the vast
+majority — anything that just hits an API) run in parallel via a thread
+pool. Sources that need OTHER sources' results first (currently just
+bruteforce, which seeds permutations from what's already been found) are
+flagged with `depends_on_others = True` on the class and run afterward,
+sequentially, with a `context` dict of everything found so far."""
 
-import asyncio
+import concurrent.futures
 import time
-from typing import Dict, Set
+from typing import Dict, List, Optional, Set
 
-import httpx
-from rich.console import Console
-
-from config import MAX_CONNECTIONS, MAX_KEEPALIVE, REQUEST_TIMEOUT, USER_AGENT
-from core.models import ScanSession, SubdomainRecord
-from core.registry import SourceRegistry
-
-console = Console()
+from core.base import BaseSource
+from core.events import SOURCE_COMPLETED, SOURCE_FAILED, SOURCE_SKIPPED, SOURCE_STARTED, EventBus
+from core.models import SourceResult
+from core.registry import all_sources
+from extractors.regex import RegexBundle
 
 
 class SourceManager:
-    def __init__(self, registry: SourceRegistry) -> None:
-        self.registry = registry
-        self.session_data = ScanSession(target_domain="")
+    def __init__(self, domain: str, bundle: RegexBundle, event_bus: Optional[EventBus] = None):
+        self.domain = domain
+        self.bundle = bundle
+        self.events = event_bus or EventBus()
 
-    async def run(self, domain: str) -> Dict[str, SubdomainRecord]:
-        self.session_data = ScanSession(target_domain=domain)
+    def _run_one(self, source_cls, context: Dict[str, SourceResult]) -> SourceResult:
+        instance = source_cls()
+        start = time.time()
 
-        limits = httpx.Limits(
-            max_connections=MAX_CONNECTIONS,
-            max_keepalive_connections=MAX_KEEPALIVE,
-        )
-        timeout = httpx.Timeout(float(REQUEST_TIMEOUT))
+        if not instance.is_available():
+            self.events.emit(SOURCE_SKIPPED, instance.name, instance.requires_key)
+            return SourceResult(
+                name=instance.name, skipped=True,
+                skip_reason=f"missing required key: {instance.requires_key}",
+            )
 
-        async with httpx.AsyncClient(
-            timeout=timeout,
-            follow_redirects=True,
-            limits=limits,
-            headers={"User-Agent": USER_AGENT},
-        ) as client:
-            tasks = []
-            for source_cls in self.registry.all():
-                source = source_cls(client)
-                tasks.append(asyncio.create_task(self._execute(source, domain)))
-
-            await asyncio.gather(*tasks)
-
-        self.session_data.end_time = time.perf_counter()
-        self.render_summary()
-        return self.session_data.records
-
-    async def _execute(self, source, domain: str):
+        self.events.emit(SOURCE_STARTED, instance.name)
         try:
-            console.print(f"[cyan][{source.name}][/cyan] Searching...")
-            discovered = await source.run(domain)
+            if getattr(instance, "depends_on_others", False):
+                subs = instance.run(self.domain, self.bundle, context=context)
+            else:
+                subs = instance.run(self.domain, self.bundle)
+            result = SourceResult(
+                name=instance.name, subdomains=subs or set(),
+                duration_seconds=time.time() - start,
+            )
+            self.events.emit(SOURCE_COMPLETED, result)
+            return result
+        except Exception as e:
+            result = SourceResult(
+                name=instance.name, error=str(e), duration_seconds=time.time() - start,
+            )
+            self.events.emit(SOURCE_FAILED, result)
+            return result
 
-            count = 0
-            for item in discovered:
-                if isinstance(item, tuple):
-                    hostname, proof = item[0], item[1]
-                else:
-                    hostname, proof = item, ""
+    def run(self, selected: List[str], max_workers: int = 12) -> Dict[str, SourceResult]:
+        registry = all_sources()
+        classes = [registry[name] for name in selected if name in registry]
 
-                hostname = hostname.lower().strip(".")
-                if not hostname.endswith(domain.lower()):
-                    continue
+        independent = [c for c in classes if not getattr(c, "depends_on_others", False)]
+        dependent = [c for c in classes if getattr(c, "depends_on_others", False)]
 
-                if hostname not in self.session_data.records:
-                    self.session_data.records[hostname] = SubdomainRecord(hostname=hostname)
+        results: Dict[str, SourceResult] = {}
 
-                self.session_data.records[hostname].add_discovery(source.name, proof)
-                count += 1
+        if independent:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(self._run_one, cls, results): cls.name for cls in independent
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    result = future.result()
+                    results[result.name] = result
 
-            self.session_data.stats[source.name] = count
-            console.print(f"[green][{source.name}][/green] Found: {count}")
+        # dependent sources run after, so they can see everything found so far
+        for cls in dependent:
+            result = self._run_one(cls, results)
+            results[result.name] = result
 
-        except Exception as exc:
-            self.session_data.errors[source.name] = str(exc)
-            console.print(f"[red][{source.name}] Failed[/red] {exc}")
+        return results
 
-    def render_summary(self):
-        elapsed = self.session_data.end_time - self.session_data.start_time
-        console.print()
-        console.print("=" * 50)
-        for source_name, count in self.session_data.stats.items():
-            console.print(f"{source_name:<25} {count}")
-        console.print("-" * 50)
-        console.print(f"Total Unique      {len(self.session_data.records)}")
-        console.print(f"Execution Time    {elapsed:.2f}s")
-        console.print("=" * 50)
+    @staticmethod
+    def merge(results: Dict[str, SourceResult]) -> Set[str]:
+        merged: Set[str] = set()
+        for r in results.values():
+            merged |= r.subdomains
+        return merged

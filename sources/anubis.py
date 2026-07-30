@@ -1,24 +1,35 @@
-from __future__ import annotations
+"""Anubis (jldc.me) — free public subdomain dataset, no key needed."""
 
-from typing import Set, Tuple
+import json
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
-from utils.helpers import extract_subdomains
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
 
 
+@register
 class AnubisSource(BaseSource):
-    name = "Anubis"
+    name = "anubis"
+    display_name = "Anubis (jldc.me)"
+    requires_key = None
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
         url = f"https://jldc.me/anubis/subdomains/{domain}"
-
         try:
-            data = await self.fetch_json(url)
-            if isinstance(data, list):
-                for hostname in data:
-                    for sub in extract_subdomains(hostname, domain):
-                        results.add((sub, "Anubis DB"))
-        except Exception:
-            pass
+            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.RequestException, json.JSONDecodeError, ValueError) as e:
+            print(f"[!] Anubis error: {e}", file=sys.stderr)
+            return results
 
+        # API returns a flat JSON list of hostnames
+        for hostname in data if isinstance(data, list) else []:
+            results |= extract_subdomains(str(hostname), domain, bundle.host)
         return results

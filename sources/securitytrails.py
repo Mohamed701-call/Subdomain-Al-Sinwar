@@ -1,29 +1,37 @@
-from __future__ import annotations
+"""SecurityTrails API — historical DNS data. Requires a paid API key."""
 
-from typing import Set, Tuple
-from config import SECURITYTRAILS_API_KEY
+import json
+import os
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
 
 
+@register
 class SecurityTrailsSource(BaseSource):
-    name = "SecurityTrails"
-    requires_key = True
+    name = "securitytrails"
+    display_name = "SecurityTrails"
+    requires_key = "SECURITYTRAILS_API_KEY"
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
-        if not SECURITYTRAILS_API_KEY:
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
+        api_key = os.environ.get("SECURITYTRAILS_API_KEY")
+        url = f"https://api.securitytrails.com/v1/domain/{domain}/subdomains"
+        headers = {"APIKEY": api_key, "Accept": "application/json", "User-Agent": USER_AGENT}
+        try:
+            resp = requests.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.RequestException, json.JSONDecodeError, ValueError) as e:
+            print(f"[!] SecurityTrails error: {e}", file=sys.stderr)
             return results
 
-        url = f"https://api.securitytrails.com/v1/domain/{domain}/subdomains"
-        headers = {"APIKEY": SECURITYTRAILS_API_KEY}
-
-        try:
-            data = await self.fetch_json(url, headers=headers)
-            if isinstance(data, dict) and "subdomains" in data:
-                for sub in data["subdomains"]:
-                    full_hostname = f"{sub}.{domain}".lower()
-                    results.add((full_hostname, "SecurityTrails API"))
-        except Exception:
-            pass
-
+        for sub in data.get("subdomains", []):
+            results |= extract_subdomains(f"{sub}.{domain}".lower(), domain, bundle.host)
         return results

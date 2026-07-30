@@ -1,7 +1,4 @@
-from __future__ import annotations
-
-import asyncio
-from main import start
+from main import run
 
 if __name__ == "__main__":
-    asyncio.run(start())
+    run()

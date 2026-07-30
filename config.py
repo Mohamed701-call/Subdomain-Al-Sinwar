@@ -1,53 +1,76 @@
-from __future__ import annotations
+"""Config-file loading (like subfinder's provider-config.yaml, but a simple
+KEY=VALUE format so no extra dependency like PyYAML is required)."""
 
 import os
-from pathlib import Path
-from dotenv import load_dotenv
+import sys
+from typing import Optional
 
-# تحديد مسار إعدادات المستخدم الدائم
-CONFIG_DIR = Path.home() / ".config" / "subdomain-al-sinwar"
-CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+# API keys this tool understands, in both config-file and env-var form.
+CONFIG_KEYS = [
+    "GITHUB_TOKEN",
+    "SECURITYTRAILS_API_KEY",
+    "URLSCAN_API_KEY",
+    "VIRUSTOTAL_API_KEY",
+    "SHODAN_API_KEY",
+    "FOFA_EMAIL",
+    "FOFA_KEY",
+]
 
-ENV_FILE = CONFIG_DIR / ".env"
+DEFAULT_CONFIG_PATHS = [
+    os.path.expanduser("~/.config/subdomain-al-sinwar/config"),
+    os.path.join(os.getcwd(), "config.env"),
+    os.path.join(os.getcwd(), ".env"),
+]
 
-# إنشاء ملف إعدادات افتراضي لو مش موجود
-if not ENV_FILE.exists():
-    default_env_content = """# Subdomain-Al-Sinwar API Keys Configuration
-GITHUB_TOKEN=
-SECURITYTRAILS_API_KEY=
-VIRUSTOTAL_API_KEY=
-SHODAN_API_KEY=
-URLSCAN_API_KEY=
-FOFA_EMAIL=
-FOFA_KEY=
-CENSYS_ID=
-CENSYS_SECRET=
-"""
-    ENV_FILE.write_text(default_env_content, encoding="utf-8")
 
-# تحميل المفاتيح من ملف إعدادات المستخدم
-load_dotenv(ENV_FILE)
+def load_config(explicit_path: Optional[str] = None) -> dict:
+    """
+    Simple KEY=VALUE config file holding API keys, so you don't have to
+    `export` env vars every session. Precedence (lowest to highest):
+    config file  <  existing environment variables  <  CLI flags.
 
-# باقي المتغيرات كما هي
-APP_NAME = "Subdomain-Al-Sinwar"
-VERSION = "1.0"
+        GITHUB_TOKEN=ghp_xxx
+        SECURITYTRAILS_API_KEY=xxx
+        URLSCAN_API_KEY=xxx
+        VIRUSTOTAL_API_KEY=xxx
+        SHODAN_API_KEY=xxx
+        FOFA_EMAIL=you@example.com
+        FOFA_KEY=xxx
 
-OUTPUT_DIR = Path("output")
-LOG_DIR = Path("logs")
+    Search order if --config isn't given:
+        ~/.config/subdomain-al-sinwar/config
+        ./config.env
+        ./.env
+    """
+    candidates = [explicit_path] if explicit_path else DEFAULT_CONFIG_PATHS
+    loaded_from = None
+    values = {}
 
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+    for path in candidates:
+        if not path or not os.path.isfile(path):
+            continue
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, val = line.partition("=")
+                    key = key.strip().upper()
+                    val = val.strip().strip('"').strip("'")
+                    if key in CONFIG_KEYS and val:
+                        values[key] = val
+            loaded_from = path
+            break
+        except OSError:
+            continue
 
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "20"))
-MAX_CONNECTIONS = int(os.getenv("MAX_CONNECTIONS", "100"))
-MAX_KEEPALIVE = int(os.getenv("MAX_KEEPALIVE", "20"))
+    for key, val in values.items():
+        os.environ.setdefault(key, val)
 
-USER_AGENT = os.getenv("USER_AGENT", f"{APP_NAME}/{VERSION}")
+    if loaded_from:
+        print(f"[*] Loaded API keys from config file: {loaded_from}", file=sys.stderr)
+    elif explicit_path:
+        print(f"[!] Config file not found: {explicit_path}", file=sys.stderr)
 
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-SECURITYTRAILS_API_KEY = os.getenv("SECURITYTRAILS_API_KEY", "")
-VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "")
-SHODAN_API_KEY = os.getenv("SHODAN_API_KEY", "")
-URLSCAN_API_KEY = os.getenv("URLSCAN_API_KEY", "")
-FOFA_EMAIL = os.getenv("FOFA_EMAIL", "")
-FOFA_KEY = os.getenv("FOFA_KEY", "")
+    return values

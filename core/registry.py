@@ -1,55 +1,28 @@
-from __future__ import annotations
+"""Source registry. Every source module registers itself with @register on
+import, so `sources/__init__.py` just has to import every module once and
+the registry fills itself in — no manual list to maintain in the manager."""
 
-from typing import List, Type
+from typing import Dict, Type
+
 from core.base import BaseSource
 
-from sources.crtsh import CrtShSource
-from sources.virustotal import VirusTotalSource
-from sources.alienvault import AlienVaultSource
-from sources.rapiddns import RapidDNSSource
-from sources.wayback import WaybackSource
-from sources.urlscan import URLScanSource
-from sources.securitytrails import SecurityTrailsSource
-from sources.anubis import AnubisSource
-from sources.hackertarget import HackerTargetSource
-from sources.shodan import ShodanSource
-from sources.threatcrowd import ThreatCrowdSource
-from sources.fofa import FofaSource
-from sources.github import GitHubSource
-from sources.search_engines import DuckDuckGoSource
+_REGISTRY: Dict[str, Type[BaseSource]] = {}
 
 
-class SourceRegistry:
-    def __init__(self) -> None:
-        self._sources: List[Type[BaseSource]] = []
-        self._register_defaults()
+def register(cls: Type[BaseSource]) -> Type[BaseSource]:
+    if not getattr(cls, "name", None):
+        raise ValueError(f"{cls.__name__} must set a 'name' class attribute")
+    _REGISTRY[cls.name] = cls
+    return cls
 
-    def register(self, source: Type[BaseSource]) -> None:
-        if source not in self._sources:
-            self._sources.append(source)
 
-    def _register_defaults(self) -> None:
-        defaults = [
-            CrtShSource,
-            VirusTotalSource,
-            AlienVaultSource,
-            RapidDNSSource,
-            WaybackSource,
-            URLScanSource,
-            SecurityTrailsSource,
-            AnubisSource,
-            HackerTargetSource,
-            ShodanSource,
-            ThreatCrowdSource,
-            FofaSource,
-            GitHubSource,
-            DuckDuckGoSource,
-        ]
-        for src in defaults:
-            self.register(src)
+def get_source(name: str) -> Type[BaseSource]:
+    return _REGISTRY[name]
 
-    def all(self) -> List[Type[BaseSource]]:
-        return list(self._sources)
 
-    def count(self) -> int:
-        return len(self._sources)
+def all_sources() -> Dict[str, Type[BaseSource]]:
+    return dict(_REGISTRY)
+
+
+def source_names() -> list:
+    return sorted(_REGISTRY.keys())

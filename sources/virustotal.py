@@ -1,30 +1,70 @@
-from __future__ import annotations
+"""VirusTotal — free community API key works, rate-limited to 4 req/min on
+the free tier (respected automatically via the delay between pages)."""
 
-from typing import Set, Tuple
-from config import VIRUSTOTAL_API_KEY
+import json
+import os
+import sys
+import time
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
 
 
+@register
 class VirusTotalSource(BaseSource):
-    name = "VirusTotal"
-    requires_key = True
+    name = "virustotal"
+    display_name = "VirusTotal"
+    requires_key = "VIRUSTOTAL_API_KEY"
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
-        if not VIRUSTOTAL_API_KEY:
-            return results
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
+        api_key = os.environ.get("VIRUSTOTAL_API_KEY")
+        headers = {"x-apikey": api_key, "User-Agent": USER_AGENT}
+        url = f"https://www.virustotal.com/api/v3/domains/{domain}/subdomains"
+        params = {"limit": 40}
 
-        url = f"https://www.virustotal.com/api/v3/domains/{domain}/subdomains?limit=40"
-        headers = {"x-apikey": VIRUSTOTAL_API_KEY}
+        for _ in range(3):  # max 3 pages by default, keeps free-tier rate limit sane
+            try:
+                resp = requests.get(url, headers=headers, params=params, timeout=20)
+            except requests.RequestException as e:
+                print(f"[!] VirusTotal request error: {e}", file=sys.stderr)
+                break
 
-        try:
-            data = await self.fetch_json(url, headers=headers)
-            if isinstance(data, dict) and "data" in data:
-                for item in data["data"]:
-                    subdomain = item.get("id", "")
-                    if subdomain.lower().endswith(domain.lower()):
-                        results.add((subdomain, "VT Domain Endpoint"))
-        except Exception:
-            pass
+            if resp.status_code == 401:
+                print("[!] VirusTotal: invalid API key.", file=sys.stderr)
+                break
+            if resp.status_code == 429:
+                print("[!] VirusTotal: rate limit hit (free tier is 4 req/min). Stopping.",
+                      file=sys.stderr)
+                break
+            if resp.status_code != 200:
+                print(f"[!] VirusTotal returned {resp.status_code}: {resp.text[:200]}",
+                      file=sys.stderr)
+                break
+
+            try:
+                data = resp.json()
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"[!] VirusTotal: couldn't parse response: {e}", file=sys.stderr)
+                break
+
+            items = data.get("data", [])
+            if not items:
+                break
+            for item in items:
+                hostname = item.get("id", "")
+                if hostname:
+                    results |= extract_subdomains(hostname, domain, bundle.host)
+
+            next_url = data.get("links", {}).get("next")
+            if not next_url:
+                break
+            url, params = next_url, {}
+            time.sleep(15)  # respect the free-tier 4 req/min rate limit
 
         return results

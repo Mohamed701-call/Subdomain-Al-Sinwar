@@ -1,25 +1,35 @@
-from __future__ import annotations
+"""Wayback Machine (archive.org CDX API) — free, no key needed. Surfaces
+old/retired subdomains that no longer show up in current DNS or certs."""
 
-from typing import Set, Tuple
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
-from utils.helpers import extract_subdomains
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
 
 
+@register
 class WaybackSource(BaseSource):
-    name = "Wayback Machine"
+    name = "wayback"
+    display_name = "Wayback Machine"
+    requires_key = None
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
-        url = f"http://web.archive.org/cdx/search/cdx?url=*.{domain}/*&output=json&fl=original&collapse=urlkey"
-
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
+        url = "https://web.archive.org/cdx/search/cdx"
+        params = {"url": f"*.{domain}/*", "output": "text", "fl": "original",
+                  "collapse": "urlkey", "limit": "100000"}
         try:
-            data = await self.fetch_json(url)
-            if isinstance(data, list) and len(data) > 1:
-                for row in data[1:]:
-                    if row:
-                        for sub in extract_subdomains(row[0], domain):
-                            results.add((sub, f"Archived URL: {row[0][:80]}"))
-        except Exception:
-            pass
+            resp = requests.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=30)
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            print(f"[!] Wayback Machine error: {e}", file=sys.stderr)
+            return results
 
+        for line in resp.text.splitlines():
+            results |= extract_subdomains(line, domain, bundle.host)
         return results

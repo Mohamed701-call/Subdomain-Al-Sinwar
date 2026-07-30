@@ -1,34 +1,61 @@
-from __future__ import annotations
+"""FOFA — requires FOFA_EMAIL + FOFA_KEY (free tier has very limited query
+credits; paid tiers get much more)."""
 
 import base64
-from typing import Set, Tuple
-from config import FOFA_EMAIL, FOFA_KEY
+import json
+import os
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
 
 
+@register
 class FofaSource(BaseSource):
-    name = "FOFA"
-    requires_key = True
+    name = "fofa"
+    display_name = "FOFA"
+    requires_key = "FOFA_KEY"  # FOFA_EMAIL also required, checked separately below
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
-        if not FOFA_EMAIL or not FOFA_KEY:
-            return results
+    def is_available(self) -> bool:
+        return bool(os.environ.get("FOFA_EMAIL")) and bool(os.environ.get("FOFA_KEY"))
+
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
+        email = os.environ.get("FOFA_EMAIL")
+        key = os.environ.get("FOFA_KEY")
 
         query = f'domain="{domain}"'
-        qbase64 = base64.b64encode(query.encode("utf-8")).decode("utf-8")
-        url = f"https://fofa.info/api/v1/search/all?email={FOFA_EMAIL}&key={FOFA_KEY}&qbase64={qbase64}"
+        qbase64 = base64.b64encode(query.encode()).decode()
 
         try:
-            data = await self.fetch_json(url)
-            if isinstance(data, dict) and "results" in data:
-                for row in data["results"]:
-                    target = row[0] if isinstance(row, list) else row
-                    if domain.lower() in target.lower():
-                        clean_host = target.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
-                        if clean_host.endswith(domain.lower()):
-                            results.add((clean_host, "FOFA Search"))
-        except Exception:
-            pass
+            resp = requests.get(
+                "https://fofa.info/api/v1/search/all",
+                params={"email": email, "key": key, "qbase64": qbase64,
+                        "fields": "host,domain", "size": 1000},
+                headers={"User-Agent": USER_AGENT}, timeout=20,
+            )
+        except requests.RequestException as e:
+            print(f"[!] FOFA request error: {e}", file=sys.stderr)
+            return results
 
+        try:
+            data = resp.json()
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"[!] FOFA: couldn't parse response: {e}", file=sys.stderr)
+            return results
+
+        if data.get("error"):
+            print(f"[!] FOFA error: {data.get('errmsg', 'unknown error')}", file=sys.stderr)
+            return results
+
+        for row in data.get("results", []):
+            # row is [host, domain] per the requested `fields` order
+            for val in row:
+                if val:
+                    results |= extract_subdomains(str(val), domain, bundle.host)
         return results

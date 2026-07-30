@@ -1,28 +1,46 @@
-from __future__ import annotations
+"""crt.sh — Certificate Transparency logs. Free, no API key needed."""
 
-from typing import Set, Tuple
+import json
+import sys
+from typing import Set
+
+import requests
+
+from core import USER_AGENT
 from core.base import BaseSource
-from utils.helpers import extract_subdomains
+from core.registry import register
+from extractors.regex import RegexBundle, extract_subdomains
+from utils.retry import retry
 
 
+@register
 class CrtShSource(BaseSource):
-    name = "crt.sh"
+    name = "crtsh"
+    display_name = "crt.sh"
+    requires_key = None
 
-    async def run(self, domain: str) -> Set[Tuple[str, str]]:
-        results = set()
-        url = f"https://crt.sh/?q=%.{domain}&output=json"
-        
+    @retry(times=3, delay=3.0, exceptions=(requests.exceptions.Timeout,))
+    def _fetch(self, domain: str, timeout: int = 60) -> dict:
+        url = f"https://crt.sh/?q=%25.{domain}&output=json"
+        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+
+    def run(self, domain: str, bundle: RegexBundle) -> Set[str]:
+        results: Set[str] = set()
         try:
-            response = await self.client.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                for entry in data:
-                    name_value = entry.get("name_value", "")
-                    for name in name_value.split("\n"):
-                        extracted = extract_subdomains(name, domain)
-                        for sub in extracted:
-                            results.add((sub, f"Cert ID: {entry.get('id')}"))
-        except Exception:
-            pass
+            data = self._fetch(domain)
+        except requests.exceptions.Timeout:
+            print("[!] crt.sh gave up after 3 attempts (often just an overloaded free "
+                  "service — try again later).", file=sys.stderr)
+            return results
+        except (requests.RequestException, json.JSONDecodeError, ValueError) as e:
+            print(f"[!] crt.sh error: {e}", file=sys.stderr)
+            return results
 
+        for entry in data:
+            for line in entry.get("name_value", "").splitlines():
+                line = line.strip().lstrip("*.")
+                if line:
+                    results |= extract_subdomains(line, domain, bundle.host)
         return results
