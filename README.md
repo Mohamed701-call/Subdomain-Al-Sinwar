@@ -44,7 +44,7 @@ Some sources need a key — missing ones are just skipped automatically.
 
 ```bash
 mkdir -p ~/.config/subdomain-al-sinwar
-cp config.example.env ~/.config/subdomain-al-sinwar/config
+cp config.API.env ~/.config/subdomain-al-sinwar/config
 nano ~/.config/subdomain-al-sinwar/config
 ```
 
