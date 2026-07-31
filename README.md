@@ -1,59 +1,87 @@
-# Subdomain-Al-Sinwar 🔍⚡
+# Subdomain-Al-Sinwar
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python" alt="Python Version">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-orange?style=for-the-badge" alt="Platform">
-</p>
+Passive + active subdomain enumeration tool. Aggregates results from 15+
+sources, deduplicates them, and DNS/HTTP-verifies brute-force results.
 
-> **Subdomain-Al-Sinwar** هي إطار عمل (Framework) حديث وسريع جداً مخصص لجمع النطاقات الفرعية بشكل غير منفذ (Passive Subdomain Enumeration) بدون إرسال أي طلبات مباشرة للهدف. صُممت الأداة خصيصاً لمختبري الاختراق، باحثي الثغرات (Bug Bounty Hunters)، وفرق الأمن السيبراني.
-
----
-
-## ✨ المميزات الرئيسية (Key Features)
-
-- ⚡ **محرك غير متزامن (Asynchronous Engine):** يعتمد على `httpx` و `asyncio` لاستعلام عشرات المصادر في نفس الوقت بأقصى سرعة.
-- 🎯 **بدون أثر (100% Passive):** لا تتفاعل مباشرة مع الهدف، بل تجمع البيانات من مصادر الاستخبارات المفتوحة (OSINT) وسجلات الشهادات (CT Logs).
-- 🛡️ **حفظ البيانات عند المقاطعة (SIGINT Safe):** لو ضغطت `Ctrl+C` في أي وقت، الأداة هتحفظ كل النتائج المجمعة فوراً ولن تفقد أي داتا.
-- 📊 **نظام التقييم والأدلة (Evidence & Confidence Scoring):** كل نطاق فرعي يتم ربطه بدليل الاكتشاف وزيادة نسبة الثقة فيه كلما ظهر في أكثر من مصدر.
-- 🔄 **إلغاء التكرار التلقائي (Deduplication):** فرز وتصفية النتائج المكررة تلقائياً.
-- 🔑 **إدارة المفاتيح والمرونة:** تعمل بمصادر مجانية وتتوسع تلقائياً عند إضافة مفاتيح الـ APIs في ملف `.env`.
-
----
-
-## 🌐 المصادر المدعومة (Supported Sources)
-
-تعتمد الأداة على مجموعة واسعة من مصادر الاستخبارات المفتوحة مقسمة حسب المستويات:
-
-### 🟢 مصادر مجانية (Free - No API Key Required)
-| المصدر | نوع الاستعلام |
-| :--- | :--- |
-| **crt.sh** | Certificate Transparency Logs |
-| **AlienVault OTX** | Open Threat Exchange Passive DNS |
-| **RapidDNS** | Fast Subdomain Database Search |
-| **Wayback Machine** | Internet Archive CDX Database |
-| **Anubis** | Domain Intelligence Database |
-| **HackerTarget** | Host Search & IP Mapping |
-| **ThreatCrowd** | Threat Intelligence Graphs |
-| **DuckDuckGo** | Search Engine Indexing |
-
-### 🔑 مصادر متقدمة (Require API Keys in `.env`)
-| المصدر | نوع المفتاح المطلوب |
-| :--- | :--- |
-| **VirusTotal** | `VIRUSTOTAL_API_KEY` |
-| **SecurityTrails** | `SECURITYTRAILS_API_KEY` |
-| **Shodan** | `SHODAN_API_KEY` |
-| **URLScan** | `URLSCAN_API_KEY` |
-| **FOFA** | `FOFA_EMAIL` & `FOFA_KEY` |
-| **GitHub Search** | `GITHUB_TOKEN` |
-
----
-
-## 🛠️ شرح التثبيت (Installation)
-
-### 1️⃣ التثبيت المباشر عبر `pip` (الطريقة الأسهل)
-
-تقدر تثبت الأداة بضغط زر واحدة من GitHub وتشتغل فوراً كـ Command في النظام:
+## Install
 
 ```bash
-pip install git+[https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git](https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git)
+git clone https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git
+cd Subdomain-Al-Sinwar
+pip install -e .
+```
+
+On Kali/Debian, if you get `externally-managed-environment`, add
+`--break-system-packages` to the command above, or use a venv:
+`python3 -m venv venv && source venv/bin/activate` first.
+
+## Usage
+
+```bash
+subdomain-al-sinwar example.com
+
+# save results
+subdomain-al-sinwar example.com -o subs.txt --json results.json
+
+# specific sources only
+subdomain-al-sinwar example.com --sources crtsh,github,bruteforce
+
+# DNS-verify all results (wildcard-aware)
+subdomain-al-sinwar example.com --resolve
+
+# brute-force with HTTP confirmation pass
+subdomain-al-sinwar example.com --sources bruteforce --http-verify
+
+# show which source found what
+subdomain-al-sinwar example.com --breakdown
+```
+
+Full flag list: `subdomain-al-sinwar --help`
+
+## API keys
+
+Some sources need a key — missing ones are just skipped automatically.
+
+```bash
+mkdir -p ~/.config/subdomain-al-sinwar
+cp config.API.env ~/.config/subdomain-al-sinwar/config
+nano ~/.config/subdomain-al-sinwar/config
+```
+
+```ini
+GITHUB_TOKEN=
+SECURITYTRAILS_API_KEY=
+VIRUSTOTAL_API_KEY=
+URLSCAN_API_KEY=
+SHODAN_API_KEY=
+FOFA_EMAIL=
+FOFA_KEY=
+```
+
+## Sources
+
+| Source | Key needed? | Notes |
+|---|---|---|
+| crt.sh | No | Certificate Transparency logs |
+| GitHub | Yes | Code, commits, issues/PRs — multiple targeted queries + regexes |
+| SecurityTrails | Yes | Historical DNS |
+| VirusTotal | Yes (free tier) | Passive DNS |
+| Shodan | Yes | DNS-domain dataset |
+| Favicon Hash + Shodan | Yes (Shodan) | Hashes the favicon, finds other hosts serving the same one |
+| FOFA | Yes | Asset search engine |
+| ProjectDiscovery Cloud DNS | No | Free public dataset |
+| Anubis | No | Free public dataset (jldc.me) |
+| Wayback Machine | No | Archived URLs, catches old/retired subdomains |
+| urlscan.io | Optional | Indexed pages |
+| HackerTarget | No | Free passive DNS |
+| AlienVault OTX | No | Free passive DNS |
+| RapidDNS.io | No | Free passive DNS |
+| ThreatCrowd | No | Free, but often unreliable/offline |
+| Brute-force + Permutation | No | Wordlist + mutation guessing, DNS/HTTP-verified |
+| Search-engine dorks | No | Generates dork URLs (`--show-dorks`), doesn't scrape |
+
+`subfinder` is not used — everything above is implemented natively.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

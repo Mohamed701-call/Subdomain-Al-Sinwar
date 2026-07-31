@@ -1,0 +1,21 @@
+# API keys / secrets — never commit these
+config.env
+.env
+*.local.env
+
+# Output artifacts
+*.txt
+!requirements.txt
+results.json
+sub.txt
+subs.txt
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+
+# OS
+.DS_Store
