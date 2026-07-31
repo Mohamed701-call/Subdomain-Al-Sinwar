@@ -8,6 +8,8 @@ sources, deduplicates them, and DNS/HTTP-verifies brute-force results.
 ```bash
 git clone https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git
 cd Subdomain-Al-Sinwar
+python3 -m venv venv
+source venv/bin/activate
 pip install -e .
 ```
 
