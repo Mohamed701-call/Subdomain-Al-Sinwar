@@ -9,8 +9,6 @@ git clone https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git
 cd Subdomain-Al-Sinwar
 pip install -e .
 subdomain-al-sinwar example.com
----
----
 
 ## Installation
 
@@ -42,13 +40,7 @@ need to type `python3 main.py`.
 > ```bash
 > # Option B (quicker, less isolated)
 > pip install -e . --break-system-packages
-> ```
->
-> Also: never `sudo git clone` or `sudo pip install` this — that leaves the
-> repo/venv owned by `root`, which causes `Permission denied` errors on
-> your own output files later. Clone and install as your normal user.
 
----
 
 ## Quick start
 
