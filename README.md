@@ -1,3 +1,16 @@
+# Subdomain-Al-Sinwar
+
+Passive + active subdomain enumeration tool. Aggregates results from 15+
+free and paid sources, deduplicates them, and DNS/HTTP-verifies brute-force
+results so you're not just guessing.
+
+```
+git clone https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git
+cd Subdomain-Al-Sinwar
+pip install -e .
+subdomain-al-sinwar example.com
+```
+
 > ⚠️ **Only run this against domains you are authorized to test** — your
 > own domains, or targets explicitly in-scope for a bug bounty / pentest
 > engagement.
@@ -18,14 +31,27 @@ This installs the `subdomain-al-sinwar` command on your PATH (via
 `setup.py`'s entry point), so you can run it from anywhere by name — no
 need to type `python3 main.py`.
 
-If you'd rather not install it system-wide, you can run it directly instead:
-
-```bash
-pip install -r requirements.txt
-python3 main.py example.com
-```
-
-Both do exactly the same thing — pick whichever you prefer.
+> **On Kali / Debian / other externally-managed Python setups**, plain
+> `pip install -e .` will fail with `error: externally-managed-environment`
+> (PEP 668) — this is a safety restriction from the OS, not a bug in this
+> tool. Use one of these instead:
+>
+> ```bash
+> # Option A (recommended): isolated virtual environment
+> python3 -m venv venv
+> source venv/bin/activate
+> pip install -e .
+> # any new terminal: run `source venv/bin/activate` again before using the tool
+> ```
+>
+> ```bash
+> # Option B (quicker, less isolated)
+> pip install -e . --break-system-packages
+> ```
+>
+> Also: never `sudo git clone` or `sudo pip install` this — that leaves the
+> repo/venv owned by `root`, which causes `Permission denied` errors on
+> your own output files later. Clone and install as your normal user.
 
 ---
 
@@ -181,3 +207,63 @@ found — e.g. if `api.example.com` is known to exist, it also tries
 ---
 
 ## Project structure
+
+```
+Subdomain-Al-Sinwar/
+├── main.py                     # orchestration entry point
+├── cli.py                      # argument parsing
+├── config.py                   # API-key config file loader
+├── __main__.py                 # python -m entry point
+├── setup.py / requirements.txt
+├── core/
+│   ├── base.py                 # BaseSource interface every source implements
+│   ├── models.py                # SourceResult / ScanResult
+│   ├── registry.py              # @register — auto-populates the source list
+│   ├── events.py                 # event bus for progress reporting
+│   └── manager.py                # runs sources in parallel, merges results
+├── extractors/
+│   └── regex.py                 # 4-regex extraction: host/URL/wildcard/CNAME
+├── utils/
+│   ├── dns_resolver.py           # DNS resolution, wildcard detection, HTTP verify
+│   ├── output.py                 # source-priority ordering, file writing
+│   ├── logger.py / banner.py / retry.py / helpers.py
+└── sources/
+    ├── crtsh.py, github.py, securitytrails.py, virustotal.py,
+    ├── shodan.py, fofa.py, favicon_shodan.py, projectdiscovery_cloud.py,
+    ├── anubis.py, wayback.py, urlscan.py, hackertarget.py, alienvault.py,
+    ├── rapiddns.py, threatcrowd.py, bruteforce.py, search_engines.py
+```
+
+Adding a new source means dropping one file in `sources/` that implements
+`BaseSource.run()` and decorating the class with `@register` — nothing else
+needs to change.
+
+---
+
+## Full flag reference
+
+```
+subdomain-al-sinwar <domain> [options]
+
+  --sources LIST          comma-separated source list (default: all)
+  -o, --output FILE       save deduplicated, source-ordered plain-text list
+  --json FILE             save full JSON report (per-source counts, errors, dorks, etc.)
+  --config FILE           path to a config file with API keys
+  --wordlist FILE         custom brute-force wordlist (one label per line)
+  --no-permutations       skip permutation generation during brute-force
+  --http-verify           extra HTTP confirmation pass for brute-force results
+  --dns-workers N         parallel DNS resolution workers (default: 50)
+  --dns-timeout N         per-lookup DNS timeout in seconds (default: 3.0)
+  --http-timeout N        per-request HTTP verify timeout in seconds (default: 5.0)
+  --resolve               DNS-verify ALL final results, wildcard-aware
+  --breakdown             show which source(s) found each subdomain
+  --show-dorks            print search-engine dork queries to stdout
+  --source-order LIST     custom source priority for file output ordering
+  --no-banner             skip the startup banner
+```
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
