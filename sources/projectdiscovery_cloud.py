@@ -31,8 +31,6 @@ class ProjectDiscoveryCloudSource(BaseSource):
             print(f"[!] ProjectDiscovery Cloud DNS error: {e}", file=sys.stderr)
             return results
 
-        # Response shape: {"domain": "example.com", "subdomains": ["api", "www", ...]}
-        # subdomains are returned as bare labels, not full hostnames.
         for label in data.get("subdomains", []):
             candidate = f"{label}.{domain}".lower()
             results |= extract_subdomains(candidate, domain, bundle.host)

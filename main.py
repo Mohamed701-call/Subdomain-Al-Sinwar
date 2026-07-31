@@ -46,9 +46,6 @@ def main() -> None:
     bundle = build_regex_bundle(domain)
     sources = [s.strip().lower() for s in args.sources.split(",") if s.strip()]
 
-    # Configure the brute-force source's tunables (it's a normal registered
-    # source, but its behavior is CLI-configurable, so set attributes on the
-    # class before the manager instantiates it).
     BruteforceSource.wordlist_path = args.wordlist
     BruteforceSource.permutations_enabled = not args.no_permutations
     BruteforceSource.max_workers = args.dns_workers

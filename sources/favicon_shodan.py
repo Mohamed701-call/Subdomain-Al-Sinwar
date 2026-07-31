@@ -5,12 +5,11 @@ automates):
   1. Fetch the target's favicon.
   2. Hash it with Shodan's favicon-hash algorithm (base64-encode the raw
      bytes the same way Shodan does internally, then mmh3/murmur3 hash it).
-  3. Search Shodan for `http.favicon.hash:<hash>` — this finds every host
-     on the internet serving the SAME favicon, which very often includes
-     other subdomains/assets of the same organization that share a common
-     app template or CDN-hosted favicon.
+  3. Search Shodan for `http.favicon.hash:<hash>` — finds every host on the
+     internet serving the SAME favicon, often other subdomains/assets of the
+     same organization sharing a common app template or CDN favicon.
   4. Each Shodan match includes a `hostnames` list for its IP — pull out any
-     hostname that matches our target domain, deduplicating automatically.
+     hostname matching our target domain, deduplicating automatically.
 
 Requires SHODAN_API_KEY (same key as sources/shodan.py) and the `mmh3`
 package (see requirements.txt).
@@ -118,7 +117,6 @@ class FaviconShodanSource(BaseSource):
         for match in matches:
             for hostname in match.get("hostnames", []) or []:
                 results |= extract_subdomains(hostname, domain, bundle.host)
-            # also check the domains field some Shodan records include
             for hostname in match.get("domains", []) or []:
                 results |= extract_subdomains(hostname, domain, bundle.host)
 

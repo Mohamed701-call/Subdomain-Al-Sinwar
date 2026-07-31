@@ -9,7 +9,7 @@ blob of text and merge + normalize + validate + dedupe the results.
 
     HOST      -> bare hostname anywhere in text: api.example.com
     URL       -> only matches when preceded by a scheme: https://api.example.com/path
-    WILDCARD  -> cert/DNS wildcard entries: *.example.com  ->  normalized to example.com's wildcard label stripped
+    WILDCARD  -> cert/DNS wildcard entries: *.example.com
     CNAME     -> DNS-zone-style lines: "sub  IN  CNAME  target.example.com."  or  "CNAME sub.example.com"
 """
 
@@ -86,7 +86,6 @@ def extract_all(text: str, bundle: RegexBundle) -> Set[str]:
         found.add(normalize_hostname(match))
 
     for match in bundle.url.findall(text):
-        # url regex captures the whole scheme+host; strip the scheme back off
         hostname = re.sub(r"^https?://", "", match, flags=re.IGNORECASE)
         found.add(normalize_hostname(hostname))
 

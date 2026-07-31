@@ -5,7 +5,6 @@ import os
 import sys
 from typing import Optional
 
-# API keys this tool understands, in both config-file and env-var form.
 CONFIG_KEYS = [
     "GITHUB_TOKEN",
     "SECURITYTRAILS_API_KEY",
@@ -25,10 +24,6 @@ DEFAULT_CONFIG_PATHS = [
 
 def load_config(explicit_path: Optional[str] = None) -> dict:
     """
-    Simple KEY=VALUE config file holding API keys, so you don't have to
-    `export` env vars every session. Precedence (lowest to highest):
-    config file  <  existing environment variables  <  CLI flags.
-
         GITHUB_TOKEN=ghp_xxx
         SECURITYTRAILS_API_KEY=xxx
         URLSCAN_API_KEY=xxx

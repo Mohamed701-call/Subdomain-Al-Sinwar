@@ -54,7 +54,6 @@ class FofaSource(BaseSource):
             return results
 
         for row in data.get("results", []):
-            # row is [host, domain] per the requested `fields` order
             for val in row:
                 if val:
                     results |= extract_subdomains(str(val), domain, bundle.host)

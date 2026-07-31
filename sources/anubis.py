@@ -29,7 +29,6 @@ class AnubisSource(BaseSource):
             print(f"[!] Anubis error: {e}", file=sys.stderr)
             return results
 
-        # API returns a flat JSON list of hostnames
         for hostname in data if isinstance(data, list) else []:
             results |= extract_subdomains(str(hostname), domain, bundle.host)
         return results
