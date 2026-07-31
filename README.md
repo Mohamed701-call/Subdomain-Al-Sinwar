@@ -9,12 +9,7 @@ git clone https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git
 cd Subdomain-Al-Sinwar
 pip install -e .
 subdomain-al-sinwar example.com
-```
-
-> ⚠️ **Only run this against domains you are authorized to test** — your
-> own domains, or targets explicitly in-scope for a bug bounty / pentest
-> engagement.
-
+---
 ---
 
 ## Installation
