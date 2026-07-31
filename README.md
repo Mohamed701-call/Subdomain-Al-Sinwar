@@ -1,59 +1,183 @@
-# Subdomain-Al-Sinwar 🔍⚡
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python" alt="Python Version">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-orange?style=for-the-badge" alt="Platform">
-</p>
-
-> **Subdomain-Al-Sinwar** هي إطار عمل (Framework) حديث وسريع جداً مخصص لجمع النطاقات الفرعية بشكل غير منفذ (Passive Subdomain Enumeration) بدون إرسال أي طلبات مباشرة للهدف. صُممت الأداة خصيصاً لمختبري الاختراق، باحثي الثغرات (Bug Bounty Hunters)، وفرق الأمن السيبراني.
+> ⚠️ **Only run this against domains you are authorized to test** — your
+> own domains, or targets explicitly in-scope for a bug bounty / pentest
+> engagement.
 
 ---
 
-## ✨ المميزات الرئيسية (Key Features)
+## Installation
 
-- ⚡ **محرك غير متزامن (Asynchronous Engine):** يعتمد على `httpx` و `asyncio` لاستعلام عشرات المصادر في نفس الوقت بأقصى سرعة.
-- 🎯 **بدون أثر (100% Passive):** لا تتفاعل مباشرة مع الهدف، بل تجمع البيانات من مصادر الاستخبارات المفتوحة (OSINT) وسجلات الشهادات (CT Logs).
-- 🛡️ **حفظ البيانات عند المقاطعة (SIGINT Safe):** لو ضغطت `Ctrl+C` في أي وقت، الأداة هتحفظ كل النتائج المجمعة فوراً ولن تفقد أي داتا.
-- 📊 **نظام التقييم والأدلة (Evidence & Confidence Scoring):** كل نطاق فرعي يتم ربطه بدليل الاكتشاف وزيادة نسبة الثقة فيه كلما ظهر في أكثر من مصدر.
-- 🔄 **إلغاء التكرار التلقائي (Deduplication):** فرز وتصفية النتائج المكررة تلقائياً.
-- 🔑 **إدارة المفاتيح والمرونة:** تعمل بمصادر مجانية وتتوسع تلقائياً عند إضافة مفاتيح الـ APIs في ملف `.env`.
-
----
-
-## 🌐 المصادر المدعومة (Supported Sources)
-
-تعتمد الأداة على مجموعة واسعة من مصادر الاستخبارات المفتوحة مقسمة حسب المستويات:
-
-### 🟢 مصادر مجانية (Free - No API Key Required)
-| المصدر | نوع الاستعلام |
-| :--- | :--- |
-| **crt.sh** | Certificate Transparency Logs |
-| **AlienVault OTX** | Open Threat Exchange Passive DNS |
-| **RapidDNS** | Fast Subdomain Database Search |
-| **Wayback Machine** | Internet Archive CDX Database |
-| **Anubis** | Domain Intelligence Database |
-| **HackerTarget** | Host Search & IP Mapping |
-| **ThreatCrowd** | Threat Intelligence Graphs |
-| **DuckDuckGo** | Search Engine Indexing |
-
-### 🔑 مصادر متقدمة (Require API Keys in `.env`)
-| المصدر | نوع المفتاح المطلوب |
-| :--- | :--- |
-| **VirusTotal** | `VIRUSTOTAL_API_KEY` |
-| **SecurityTrails** | `SECURITYTRAILS_API_KEY` |
-| **Shodan** | `SHODAN_API_KEY` |
-| **URLScan** | `URLSCAN_API_KEY` |
-| **FOFA** | `FOFA_EMAIL` & `FOFA_KEY` |
-| **GitHub Search** | `GITHUB_TOKEN` |
-
----
-
-## 🛠️ شرح التثبيت (Installation)
-
-### 1️⃣ التثبيت المباشر عبر `pip` (الطريقة الأسهل)
-
-تقدر تثبت الأداة بضغط زر واحدة من GitHub وتشتغل فوراً كـ Command في النظام:
+**Requirements:** Python 3.8+
 
 ```bash
-pip install git+[https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git](https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git)
+git clone https://github.com/Mohamed701-call/Subdomain-Al-Sinwar.git
+cd Subdomain-Al-Sinwar
+pip install -e .
+```
+
+This installs the `subdomain-al-sinwar` command on your PATH (via
+`setup.py`'s entry point), so you can run it from anywhere by name — no
+need to type `python3 main.py`.
+
+If you'd rather not install it system-wide, you can run it directly instead:
+
+```bash
+pip install -r requirements.txt
+python3 main.py example.com
+```
+
+Both do exactly the same thing — pick whichever you prefer.
+
+---
+
+## Quick start
+
+```bash
+# Run every source against a domain
+subdomain-al-sinwar example.com
+
+# Save results to a file + full JSON report
+subdomain-al-sinwar example.com -o subs.txt --json results.json
+
+# Only specific sources
+subdomain-al-sinwar example.com --sources crtsh,github,bruteforce
+
+# DNS-verify every result (drops stale/dead entries, wildcard-aware)
+subdomain-al-sinwar example.com --resolve
+
+# Brute-force with an extra HTTP confirmation pass (highest confidence)
+subdomain-al-sinwar example.com --sources bruteforce --http-verify
+
+# See which source found each subdomain
+subdomain-al-sinwar example.com --breakdown
+
+# Use a bigger external wordlist for brute-force (e.g. SecLists)
+subdomain-al-sinwar example.com --wordlist /path/to/subdomains.txt
+```
+
+Run `subdomain-al-sinwar --help` for the full list of flags.
+
+---
+
+## API keys (optional, but unlocks more sources)
+
+Several sources need an API key. Sources missing a key are skipped
+automatically — the tool never errors out because of a missing key, it just
+runs everything it can with what you've configured.
+
+Copy the example config once and fill in whatever keys you have:
+
+```bash
+mkdir -p ~/.config/subdomain-al-sinwar
+cp config.example.env ~/.config/subdomain-al-sinwar/config
+nano ~/.config/subdomain-al-sinwar/config
+```
+
+```ini
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+SECURITYTRAILS_API_KEY=
+VIRUSTOTAL_API_KEY=
+URLSCAN_API_KEY=
+SHODAN_API_KEY=
+FOFA_EMAIL=
+FOFA_KEY=
+```
+
+You can also just `export` them as environment variables instead, or point
+to a config file anywhere with `--config /path/to/file`. A real exported
+env var always takes priority over the config file.
+
+| Key | Free tier? | Get it at |
+|---|---|---|
+| `GITHUB_TOKEN` | Yes | github.com/settings/tokens |
+| `SECURITYTRAILS_API_KEY` | Limited trial | securitytrails.com |
+| `VIRUSTOTAL_API_KEY` | Yes (4 req/min) | virustotal.com |
+| `URLSCAN_API_KEY` | Optional — works without one | urlscan.io |
+| `SHODAN_API_KEY` | Limited free tier | shodan.io |
+| `FOFA_EMAIL` / `FOFA_KEY` | Limited free tier | fofa.info |
+
+---
+
+## Where subdomains come from
+
+| Source | Key needed? | What it does |
+|---|---|---|
+| **crt.sh** | No | Scans Certificate Transparency logs for every cert ever issued containing the domain |
+| **GitHub** | Yes | Deep multi-endpoint search — see below, this one's not just a regex over code |
+| **SecurityTrails** | Yes | Historical DNS records |
+| **VirusTotal** | Yes (free) | Known subdomains from VT's passive DNS dataset |
+| **Shodan** | Yes | Shodan's DNS-domain dataset for the target |
+| **Favicon Hash + Shodan** | Yes (Shodan key) | Hashes the site's favicon the way Shodan does internally, searches Shodan for every other host serving the *same* favicon, and pulls subdomains out of their hostnames — catches related infrastructure that shares a common app/CDN template |
+| **FOFA** | Yes | FOFA's asset search engine |
+| **ProjectDiscovery Cloud DNS** | No | Free public passive-DNS dataset |
+| **Anubis** | No | Free public subdomain dataset (jldc.me) |
+| **Wayback Machine** | No | Archived URLs — surfaces old/retired subdomains that no longer show up anywhere else |
+| **urlscan.io** | Optional | Indexed pages that mention the domain |
+| **HackerTarget** | No | Free passive DNS lookup |
+| **AlienVault OTX** | No | Free passive DNS |
+| **RapidDNS.io** | No | Free passive DNS |
+| **ThreatCrowd** | No | Free, but the public API is known to be unreliable/frequently offline |
+| **Brute-force + Permutation** | No | Wordlist + smart mutation guessing, fully DNS/HTTP-verified — see below |
+| **Search-engine dorks** | No | Generates ready-to-use Google/Bing/DuckDuckGo dork URLs (`--show-dorks`) — doesn't scrape search engines directly, since that's against their ToS |
+
+**subfinder is intentionally not used or bundled** — this tool doesn't
+shell out to any external binary; every source above is implemented
+natively.
+
+### How GitHub search actually works here
+
+Most tools do one generic regex search over GitHub code and call it done.
+This one searches multiple endpoints with multiple targeted queries:
+
+- **`/search/code`** — not just a bare domain search, but *15 targeted
+  queries* covering `.env`, YAML, JSON, JS, TS, Terraform, Dockerfiles,
+  docker-compose, nginx configs, generic `.conf` files, `hosts` files, and
+  `.github/workflows/` (Actions configs). It also specifically searches for
+  `filename:CNAME` — a repo's `CNAME` file is literally the custom domain
+  configured for its GitHub Pages site.
+- **`/search/commits`** — commit messages often leak hostnames ("fix DNS
+  for staging.example.com").
+- **`/search/issues`** — issues *and* pull requests (title + body).
+
+Every result from every endpoint goes through **four separate regexes**
+(host, URL-context, wildcard, and CNAME-zone-style), then gets normalized,
+validated, and deduplicated.
+
+Gist search, wiki search, cross-repo release search, and Pages *content*
+search have no public REST API endpoint on GitHub's side, so they're not
+included — scraping GitHub's web search directly is unreliable and against
+their ToS, the same reason this tool doesn't scrape Google either.
+
+### How brute-force verification works
+
+Every brute-forced/permuted candidate is **verified**, not just guessed:
+
+1. **DNS resolution** — must actually resolve to an A/AAAA record.
+2. **Wildcard-DNS filtering (automatic)** — many domains have wildcard DNS,
+   where `*.domain` resolves to *something* for literally any subdomain.
+   Before brute-forcing, the tool probes a few random, essentially
+   impossible-to-collide labels to fingerprint the wildcard's IP set. Any
+   candidate whose resolved IPs are entirely explained by that wildcard is
+   discarded automatically.
+3. **HTTP verification (optional, `--http-verify`)** — an extra pass that
+   makes a real HTTPS/HTTP request against each DNS-confirmed candidate.
+   Only candidates that get an actual response are kept.
+
+It also seeds smart permutations from whatever every other source already
+found — e.g. if `api.example.com` is known to exist, it also tries
+`api-dev.example.com`, `dev-api.example.com`, `api2.example.com`, etc.
+
+---
+
+## How results are combined
+
+- Every source's raw output is filtered through the same domain-matching
+  regex, so noise from one source can't leak unrelated hostnames in.
+- The final list is deduplicated across **all** sources.
+- When saving to file (`-o`), subdomains are ordered by source priority
+  (default: GitHub → SecurityTrails → VirusTotal → Shodan → FOFA → ... →
+  brute-force last) — configurable with `--source-order`. A subdomain found
+  by multiple sources is listed once, credited to the first matching source.
+
+---
+
+## Project structure
